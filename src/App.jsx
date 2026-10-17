@@ -1,227 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import {
-  ArrowDownRight, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check,
-  Code2, ExternalLink, GraduationCap, Layers3, LogIn, LogOut, Mail, Menu,
-  Save, ShieldCheck, Sparkles, Upload, X, FileText, Award, BriefcaseBusiness, ScrollText, ImagePlus
-} from 'lucide-react';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
-
-const initialContent = {
-  profile: {
-    name: 'Dr. G. Radhika',
-    role: 'Lecturer in Computers',
-    college: 'GDC (A), Khairatabad',
-    location: 'Hyderabad',
-    eyebrow: 'ACADEMIC PORTFOLIO · COMPUTER SCIENCE',
-    headline: 'Curiosity into capability.',
-    intro: 'Making computer science clearer, more practical, and more connected to the world students are preparing to enter.',
-    about: 'I am a Computer Science educator committed to making technical concepts understandable, practical and relevant to students. My teaching and mentoring approach connects classroom learning with hands-on activities, digital tools and career-oriented skill development.',
-    email: '',
-    phone: '',
-    photo: '',
-    collegeLogo: '',
-    socials: { linkedin: '', youtube: '', instagram: '', website: '' }
-  },
-  qualifications: [],
-  experience: [],
-  achievements: [],
-  publications: [],
-  expertise: [
-    { title: 'Database Systems', description: 'DBMS, RDBMS, SQL, database concepts, design and practical examples.', icon: 'database' },
-    { title: 'Software Engineering & UML', description: 'Object-oriented analysis, UML diagrams, modelling and software design.', icon: 'layers' },
-    { title: 'Web Technologies', description: 'Web fundamentals, client-server concepts and practical development.', icon: 'code' },
-    { title: 'Programming', description: 'Programming fundamentals, Python and problem-solving through examples.', icon: 'terminal' },
-    { title: 'Data Science & Analytics', description: 'Data concepts, analytics, visualization and technology applications.', icon: 'chart' },
-    { title: 'AI & Digital Learning', description: 'Exploring emerging AI tools and responsible, technology-enabled learning.', icon: 'brain' }
-  ],
-  courses: [
-    { title: 'Fundamentals of DBMS', description: 'Concepts, examples, SQL practice and review questions.', status: 'In development', link: '' },
-    { title: 'UML & Object-Oriented Modeling', description: 'Use cases, class diagrams, interactions and system design.', status: 'In development', link: '' },
-    { title: 'Computer Science Learning Series', description: 'Short, practical modules for undergraduate learners.', status: 'Planned', link: '' }
-  ],
-  initiatives: [
-    { title: 'AI & Digital Learning', description: 'Helping students explore AI, digital tools and technology-enabled learning.' },
-    { title: 'Student Mentoring', description: 'Supporting confidence, creativity, leadership and career readiness.' },
-    { title: 'Experiential Learning', description: 'Connecting classroom concepts with workshops, projects and practical activities.' }
-  ],
-  resources: [
-    { title: 'Lecture Notes', description: 'Structured notes, definitions, diagrams and worked examples.', label: 'PDF / NOTES', link: '' },
-    { title: 'Video Lessons', description: 'Short lessons that break down difficult computer science concepts.', label: 'WATCH', link: '' },
-    { title: 'Practice & Quizzes', description: 'Exercises and questions for concept reinforcement.', label: 'PRACTICE', link: '' }
-  ],
-  footer: 'Teaching, mentoring and lifelong learning.'
-};
-
-const iconMap = { database: Layers3, layers: Layers3, code: Code2, terminal: Code2, chart: BookOpen, brain: BrainCircuit };
-
-function readLocal() {
-  try {
-    const saved = localStorage.getItem('radhika-portfolio-preview');
-    return saved ? JSON.parse(saved) : initialContent;
-  } catch { return initialContent; }
-}
-
-function App() {
-  const [content, setContent] = useState(readLocal);
-  const [loading, setLoading] = useState(Boolean(supabase));
-  const [user, setUser] = useState(null);
-  const [adminOpen, setAdminOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [authBusy, setAuthBusy] = useState(false);
-  const [editJson, setEditJson] = useState('');
-  const [editError, setEditError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [uploadBusy, setUploadBusy] = useState(false);
-
-  useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
-    let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (active) setUser(data.session?.user ?? null);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    supabase.from('site_content').select('content').eq('id', 'main').maybeSingle()
-      .then(({ data, error }) => {
-        if (active && data?.content) setContent({ ...initialContent, ...data.content });
-        if (active && error) console.error(error.message);
-      }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; listener.subscription.unsubscribe(); };
-  }, []);
-
-  useEffect(() => {
-    if (user && !editJson) setEditJson(JSON.stringify(content, null, 2));
-  }, [user, content, editJson]);
-
-  const nav = [
-    ['About', '#about'], ['Teaching', '#teaching'], ['Courses', '#courses'],
-    ['Initiatives', '#initiatives'], ['Career', '#career'], ['Publications', '#publications'], ['Resources', '#resources']
-  ];
-
-  function openAdmin() {
-    setEditJson(JSON.stringify(content, null, 2));
-    setEditError('');
-    setNotice('');
-    setAdminOpen(true);
-  }
-
-  async function signIn(event) {
-    event.preventDefault(); setAuthError(''); setAuthBusy(true);
-    if (!supabase) {
-      setAuthError('Connect Supabase first. Follow SETUP.md, then restart the development server.');
-      setAuthBusy(false); return;
-    }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setAuthError(error.message);
-    else { setNotice('Signed in. Your private editor is ready.'); setEditJson(JSON.stringify(content, null, 2)); }
-    setAuthBusy(false);
-  }
-
-  async function saveContent() {
-    setEditError(''); setNotice('');
-    let parsed;
-    try { parsed = JSON.parse(editJson); }
-    catch { setEditError('The content has a JSON syntax error. Check commas, quotes and brackets.'); return; }
-    if (!parsed.profile?.name || !parsed.profile?.role) {
-      setEditError('Please keep the profile name and role fields.'); return;
-    }
-    if (!supabase || !user) {
-      setEditError('Sign in to the connected Supabase admin account to publish changes.');
-      return;
-    }
-    const { error } = await supabase.from('site_content').upsert({
-      id: 'main', content: parsed, updated_at: new Date().toISOString()
-    });
-    if (error) { setEditError(error.message); return; }
-    setContent(parsed);
-    setNotice('Published! Your public portfolio now uses the updated content.');
-  }
-
-  async function uploadImage(event, field) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!supabase || !user) { setEditError('Sign in to the admin dashboard before uploading media.'); return; }
-    if (!file.type.startsWith('image/')) { setEditError('Choose an image file.'); return; }
-    if (file.size > 5 * 1024 * 1024) { setEditError('Choose an image smaller than 5 MB.'); return; }
-    setUploadBusy(true); setEditError(''); setNotice('');
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const path = `images/${user.id}-${field}-${Date.now()}.${ext}`;
-    const { error: uploadError } = await supabase.storage.from('portfolio-media').upload(path, file, { upsert: true });
-    if (uploadError) { setEditError(uploadError.message); setUploadBusy(false); return; }
-    const { data } = supabase.storage.from('portfolio-media').getPublicUrl(path);
-    const next = { ...content, profile: { ...content.profile, [field]: data.publicUrl } };
-    setContent(next); setEditJson(JSON.stringify(next, null, 2));
-    setNotice(`${field === 'photo' ? 'Profile photo' : 'College logo'} uploaded. Click “Publish changes” to make it live.`);
-    setUploadBusy(false); event.target.value = '';
-  }
-
-  async function uploadResource(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!supabase || !user) { setEditError('Sign in to the admin dashboard before uploading resources.'); return; }
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    if (!isPdf) { setEditError('Please choose a PDF lecture note or resource.'); return; }
-    if (file.size > 25 * 1024 * 1024) { setEditError('Choose a PDF smaller than 25 MB.'); return; }
-    setUploadBusy(true); setEditError(''); setNotice('');
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
-    const path = `resources/${user.id}-${Date.now()}-${safeName}`;
-    const { error: uploadError } = await supabase.storage.from('portfolio-media').upload(path, file, { upsert: false, contentType: 'application/pdf' });
-    if (uploadError) { setEditError(uploadError.message); setUploadBusy(false); return; }
-    const { data } = supabase.storage.from('portfolio-media').getPublicUrl(path);
-    const next = { ...content, resources: [...(content.resources || []), { title: file.name.replace(/\.pdf$/i, ''), description: 'PDF learning resource', label: 'PDF / NOTES', link: data.publicUrl }] };
-    setContent(next); setEditJson(JSON.stringify(next, null, 2));
-    setNotice('PDF uploaded and added to resources. Click “Publish changes” to make it live.');
-    setUploadBusy(false); event.target.value = '';
-  }
-
-  async function signOut() {
-    if (supabase) await supabase.auth.signOut();
-    setUser(null); setNotice('Signed out.');
-  }
-
-  const isConfigured = Boolean(supabase);
-  const skills = useMemo(() => content.expertise || [], [content.expertise]);
-  const isAdminRoute = window.location.pathname.replace(/\/+$/, '') === '/admin';
-
-  // Dedicated admin URL; it is not linked from the public portfolio.
-  if (isAdminRoute) {
-    return (
-      <div className="admin-page">
-        <div className="admin-page-top">
-          <a className="brand" href="/"><span className="brand-mark">R<span>.</span></span><span className="brand-text">{content.profile.name}<small>PORTFOLIO ADMINISTRATION</small></span></a>
-          <a className="admin-back-link" href="/">← View public website</a>
-        </div>
-        <main className="admin-page-main">
-          <div className="section-marker"><span>PRIVATE</span> ADMINISTRATOR AREA</div>
-          <h1 className="admin-page-title">{user ? 'Manage your website.' : 'Administrator sign in.'}</h1>
-          <p className="admin-page-intro">Sign in with the private administrator account to update the public academic portfolio.</p>
-          {!isConfigured && <div className="notice notice-warn">Admin login is not active yet. Complete the Supabase setup in SETUP.md and configure the environment variables.</div>}
-          {!user ? (
-            <form className="login-form admin-login-card" onSubmit={signIn}>
-              <label>Email address<input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Admin email address"/></label>
-              <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Password"/></label>
-              {authError && <p className="form-error">{authError}</p>}
-              <button className="button button-dark" disabled={authBusy}>{authBusy ? 'Signing in…' : 'Sign in securely'} <LogIn size={16}/></button>
-              <p className="form-hint">There is no public registration. Create the admin account privately in Supabase.</p>
-            </form>
-          ) : (
-            <div className="admin-page-editor">
-              <div className="admin-user"><ShieldCheck size={18}/><span>Signed in as {user.email}</span><button onClick={signOut}><LogOut size={14}/> Sign out</button></div>
-              <div className="notice">Edit the website content below. Preserve the JSON structure and valid syntax, then publish to update the public site.</div>
-              <label className="json-label">Website content<textarea className="json-editor" spellCheck="false" value={editJson} onChange={e => setEditJson(e.target.value)} /></label>
-              <div className="admin-tools">
-                <div className="upload-actions"><label className="upload-button"><ImagePlus size={16}/>Upload profile photo<input type="file" accept="image/*" onChange={e => uploadImage(e, 'photo')} hidden disabled={uploadBusy}/></label><label className="upload-button"><ImagePlus size={16}/>Upload college logo<input type="file" accept="image/*" onChange={e => uploadImage(e, 'collegeLogo')} hidden disabled={uploadBusy}/></label><label className="upload-button"><FileText size={16}/>{uploadBusy ? 'Uploading…' : 'Upload lecture PDF'}<input type="file" accept="application/pdf,.pdf" onChange={uploadResource} hidden disabled={uploadBusy}/></label></div>
-                <button className="button button-dark" onClick={saveContent}><Save size={16}/> Publish changes</button>
+                    <div className="admin-panel-heading admin-panel-heading-row"><div><span className="admin-kicker">CONTENT SECTION</span><h3>{adminSections.find(section => section.id === adminSection)?.label}</h3><p>{adminSections.find(section => section.id === adminSection)?.hint}</p></div><button type="button" className="button button-outline" onClick={() => addListItem(adminSection)}>＋ Add item</button></div>
+                    {(content[adminSection] || []).length === 0 && <div className="admin-empty-state"><BookOpen size={25}/><strong>No items added yet</strong><p>Add your first item using the button above.</p><button type="button" className="button button-dark" onClick={() => addListItem(adminSection)}>＋ Add first item</button></div>}
+                    <div className="admin-record-list">{(content[adminSection] || []).map((item, index) => <article className="admin-record-card" key={`${adminSection}-${index}`}>
+                      <div className="admin-record-heading"><div><span>ITEM {String(index + 1).padStart(2, '0')}</span><strong>{item.title || `New ${adminSections.find(section => section.id === adminSection)?.label.toLowerCase()} item`}</strong></div><button type="button" className="admin-remove-button" onClick={() => removeListItem(adminSection, index)}><X size={15}/> Remove</button></div>
+                      <div className="admin-fields-grid">{(adminListFields[adminSection] || []).map(field => <label key={field.key} className={`admin-field ${field.multiline ? 'admin-field-wide' : ''}`}>{field.label}{field.multiline ? <textarea rows={3} value={item[field.key] || ''} onChange={e => updateListField(adminSection, index, field.key, e.target.value)} placeholder={`Enter ${field.label.toLowerCase()}`}/> : <input value={item[field.key] || ''} onChange={e => updateListField(adminSection, index, field.key, e.target.value)} placeholder={`Enter ${field.label.toLowerCase()}`}/>}</label>)}</div>
+                      {adminSection === 'achievements' && item.image && <div className="admin-image-preview"><img src={item.image} alt={item.title || 'Achievement certificate preview'}/></div>}
+                    </article>)}</div>
+                    {adminSection === 'resources' && <div className="admin-upload-resource"><div><strong>Upload a lecture PDF</strong><p>Upload a PDF to add it to the resources list automatically.</p></div><label className="upload-button"><FileText size={16}/>{uploadBusy ? 'Uploading…' : 'Upload lecture PDF'}<input type="file" accept="application/pdf,.pdf" onChange={uploadResource} hidden disabled={uploadBusy}/></label></div>}
+                  </>}
+                  {adminSection !== 'resources' && <div className="admin-quick-upload"><div><strong>Lecture PDF</strong><p>Add a PDF resource to your public website.</p></div><label className="upload-button"><FileText size={16}/>{uploadBusy ? 'Uploading…' : 'Upload lecture PDF'}<input type="file" accept="application/pdf,.pdf" onChange={uploadResource} hidden disabled={uploadBusy}/></label></div>}
+                  {editError && <p className="form-error" role="alert">{editError}</p>}
+                  <div className="admin-panel-footer"><span><ShieldCheck size={15}/> Your edits are saved to the database only after publishing.</span><button className="button button-dark" onClick={saveContent} disabled={uploadBusy}><Save size={16}/> Publish changes</button></div>
+                </section>
               </div>
-              {editError && <p className="form-error">{editError}</p>}
             </div>
           )}
           {notice && <p className="notice notice-success"><Check size={16}/>{notice}</p>}
@@ -288,7 +78,7 @@ function App() {
           <div className="section-marker"><span>05</span> ACADEMIC JOURNEY</div>
           <div className="career-columns">
             <div><h2>Qualifications & <em>experience.</em></h2><div className="timeline-list">{(content.qualifications || []).map((item, i) => <article className="timeline-item" key={`${item.title}-${i}`}><GraduationCap size={19}/><div><h3>{item.title}</h3><p>{item.institution || ''}{item.year ? ` · ${item.year}` : ''}</p>{item.description && <small>{item.description}</small>}</div></article>)}{(content.experience || []).map((item, i) => <article className="timeline-item" key={`${item.title}-${i}`}><BriefcaseBusiness size={19}/><div><h3>{item.title}</h3><p>{item.organization || ''}{item.period ? ` · ${item.period}` : ''}</p>{item.description && <small>{item.description}</small>}</div></article>)}{!(content.qualifications || []).length && !(content.experience || []).length && <p className="empty-section-note">Qualifications and experience can be added by the administrator.</p>}</div></div>
-            <div><h2>Achievements & <em>recognition.</em></h2><div className="timeline-list">{(content.achievements || []).map((item, i) => <article className="timeline-item" key={`${item.title}-${i}`}><Award size={19}/><div><h3>{item.title}</h3><p>{item.organization || ''}{item.year ? ` · ${item.year}` : ''}</p>{item.description && <small>{item.description}</small>}</div></article>)}{!(content.achievements || []).length && <p className="empty-section-note">Awards, certifications and achievements can be added here.</p>}</div></div>
+            <div><h2>Achievements & <em>recognition.</em></h2><div className="timeline-list">{(content.achievements || []).map((item, i) => <article className="timeline-item" key={`${item.title}-${i}`}><Award size={19}/><div><h3>{item.title}</h3><p>{item.organization || ''}{item.year ? ` · ${item.year}` : ''}</p>{item.description && <small>{item.description}</small>}{item.image && <img className="achievement-image" src={item.image} alt={`${item.title} certificate`} loading="lazy"/>}{item.link && <p><a href={item.link} target="_blank" rel="noreferrer">View certificate <ArrowUpRight size={14}/></a></p>}</div></article>)}{!(content.achievements || []).length && <p className="empty-section-note">Awards, certifications and achievements can be added here.</p>}</div></div>
           </div>
         </section>
 
