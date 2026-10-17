@@ -1,3 +1,195 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import {
+  ArrowDownRight, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check,
+  Code2, ExternalLink, GraduationCap, Layers3, LogIn, LogOut, Mail, Menu,
+  Save, ShieldCheck, Sparkles, Upload, X, FileText, Award, BriefcaseBusiness, ScrollText, ImagePlus
+} from 'lucide-react';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+const initialContent = {
+  profile: {
+    name: 'Dr. G. Radhika',
+    role: 'Lecturer in Computers',
+    college: 'GDC (A), Khairatabad',
+    location: 'Hyderabad',
+    eyebrow: 'ACADEMIC PORTFOLIO · COMPUTER SCIENCE',
+    headline: 'Curiosity into capability.',
+    intro: 'Making computer science clearer, more practical, and more connected to the world students are preparing to enter.',
+    about: 'I am a Computer Science educator committed to making technical concepts understandable, practical and relevant to students. My teaching and mentoring approach connects classroom learning with hands-on activities, digital tools and career-oriented skill development.',
+    email: '',
+    phone: '',
+    photo: '',
+    collegeLogo: '',
+    socials: { linkedin: '', youtube: '', instagram: '', website: '' }
+  },
+  qualifications: [],
+  experience: [],
+  achievements: [],
+  publications: [],
+  expertise: [
+    { title: 'Database Systems', description: 'DBMS, RDBMS, SQL, database concepts, design and practical examples.', icon: 'database' },
+    { title: 'Software Engineering & UML', description: 'Object-oriented analysis, UML diagrams, modelling and software design.', icon: 'layers' },
+    { title: 'Web Technologies', description: 'Web fundamentals, client-server concepts and practical development.', icon: 'code' },
+    { title: 'Programming', description: 'Programming fundamentals, Python and problem-solving through examples.', icon: 'terminal' },
+    { title: 'Data Science & Analytics', description: 'Data concepts, analytics, visualization and technology applications.', icon: 'chart' },
+    { title: 'AI & Digital Learning', description: 'Exploring emerging AI tools and responsible, technology-enabled learning.', icon: 'brain' }
+  ],
+  courses: [
+    { title: 'Fundamentals of DBMS', description: 'Concepts, examples, SQL practice and review questions.', status: 'In development', link: '' },
+    { title: 'UML & Object-Oriented Modeling', description: 'Use cases, class diagrams, interactions and system design.', status: 'In development', link: '' },
+    { title: 'Computer Science Learning Series', description: 'Short, practical modules for undergraduate learners.', status: 'Planned', link: '' }
+  ],
+  initiatives: [
+    { title: 'AI & Digital Learning', description: 'Helping students explore AI, digital tools and technology-enabled learning.' },
+    { title: 'Student Mentoring', description: 'Supporting confidence, creativity, leadership and career readiness.' },
+    { title: 'Experiential Learning', description: 'Connecting classroom concepts with workshops, projects and practical activities.' }
+  ],
+  resources: [
+    { title: 'Lecture Notes', description: 'Structured notes, definitions, diagrams and worked examples.', label: 'PDF / NOTES', link: '' },
+    { title: 'Video Lessons', description: 'Short lessons that break down difficult computer science concepts.', label: 'WATCH', link: '' },
+    { title: 'Practice & Quizzes', description: 'Exercises and questions for concept reinforcement.', label: 'PRACTICE', link: '' }
+  ],
+  footer: 'Teaching, mentoring and lifelong learning.'
+};
+
+const iconMap = { database: Layers3, layers: Layers3, code: Code2, terminal: Code2, chart: BookOpen, brain: BrainCircuit };
+
+function readLocal() {
+  try {
+    const saved = localStorage.getItem('radhika-portfolio-preview');
+    return saved ? JSON.parse(saved) : initialContent;
+  } catch { return initialContent; }
+}
+
+function App() {
+  const [content, setContent] = useState(readLocal);
+  const [loading, setLoading] = useState(Boolean(supabase));
+  const [user, setUser] = useState(null);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
+  const [editJson, setEditJson] = useState('');
+  const [editError, setEditError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [uploadBusy, setUploadBusy] = useState(false);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) setUser(data.session?.user ?? null);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    supabase.from('site_content').select('content').eq('id', 'main').maybeSingle()
+      .then(({ data, error }) => {
+        if (active && data?.content) setContent({ ...initialContent, ...data.content });
+        if (active && error) console.error(error.message);
+      }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; listener.subscription.unsubscribe(); };
+  }, []);
+
+  useEffect(() => {
+    if (user && !editJson) setEditJson(JSON.stringify(content, null, 2));
+  }, [user, content, editJson]);
+
+  const nav = [
+    ['About', '#about'], ['Teaching', '#teaching'], ['Courses', '#courses'],
+    ['Initiatives', '#initiatives'], ['Career', '#career'], ['Publications', '#publications'], ['Resources', '#resources']
+  ];
+
+  function openAdmin() {
+    setEditJson(JSON.stringify(content, null, 2));
+    setEditError('');
+    setNotice('');
+    setAdminOpen(true);
+  }
+
+  async function signIn(event) {
+    event.preventDefault(); setAuthError(''); setAuthBusy(true);
+    if (!supabase) {
+      setAuthError('Connect Supabase first. Follow SETUP.md, then restart the development server.');
+      setAuthBusy(false); return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    else { setNotice('Signed in. Your private editor is ready.'); setEditJson(JSON.stringify(content, null, 2)); }
+    setAuthBusy(false);
+  }
+
+  async function saveContent() {
+    setEditError(''); setNotice('');
+    let parsed;
+    try { parsed = JSON.parse(editJson); }
+    catch { setEditError('The content has a JSON syntax error. Check commas, quotes and brackets.'); return; }
+    if (!parsed.profile?.name || !parsed.profile?.role) {
+      setEditError('Please keep the profile name and role fields.'); return;
+    }
+    if (!supabase || !user) {
+      setEditError('Sign in to the connected Supabase admin account to publish changes.');
+      return;
+    }
+    const { error } = await supabase.from('site_content').upsert({
+      id: 'main', content: parsed, updated_at: new Date().toISOString()
+    });
+    if (error) { setEditError(error.message); return; }
+    setContent(parsed);
+    setNotice('Published! Your public portfolio now uses the updated content.');
+  }
+
+  async function uploadImage(event, field) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!supabase || !user) { setEditError('Sign in to the admin dashboard before uploading media.'); return; }
+    if (!file.type.startsWith('image/')) { setEditError('Choose an image file.'); return; }
+    if (file.size > 5 * 1024 * 1024) { setEditError('Choose an image smaller than 5 MB.'); return; }
+    setUploadBusy(true); setEditError(''); setNotice('');
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const path = `images/${user.id}-${field}-${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from('portfolio-media').upload(path, file, { upsert: true });
+    if (uploadError) { setEditError(uploadError.message); setUploadBusy(false); return; }
+    const { data } = supabase.storage.from('portfolio-media').getPublicUrl(path);
+    const next = { ...content, profile: { ...content.profile, [field]: data.publicUrl } };
+    setContent(next); setEditJson(JSON.stringify(next, null, 2));
+    setNotice(`${field === 'photo' ? 'Profile photo' : 'College logo'} uploaded. Click “Publish changes” to make it live.`);
+    setUploadBusy(false); event.target.value = '';
+  }
+
+  async function uploadResource(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!supabase || !user) { setEditError('Sign in to the admin dashboard before uploading resources.'); return; }
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) { setEditError('Please choose a PDF lecture note or resource.'); return; }
+    if (file.size > 25 * 1024 * 1024) { setEditError('Choose a PDF smaller than 25 MB.'); return; }
+    setUploadBusy(true); setEditError(''); setNotice('');
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+    const path = `resources/${user.id}-${Date.now()}-${safeName}`;
+    const { error: uploadError } = await supabase.storage.from('portfolio-media').upload(path, file, { upsert: false, contentType: 'application/pdf' });
+    if (uploadError) { setEditError(uploadError.message); setUploadBusy(false); return; }
+    const { data } = supabase.storage.from('portfolio-media').getPublicUrl(path);
+    const next = { ...content, resources: [...(content.resources || []), { title: file.name.replace(/\.pdf$/i, ''), description: 'PDF learning resource', label: 'PDF / NOTES', link: data.publicUrl }] };
+    setContent(next); setEditJson(JSON.stringify(next, null, 2));
+    setNotice('PDF uploaded and added to resources. Click “Publish changes” to make it live.');
+    setUploadBusy(false); event.target.value = '';
+  }
+
+  async function signOut() {
+    if (supabase) await supabase.auth.signOut();
+    setUser(null); setNotice('Signed out.');
+  }
+
+  const isConfigured = Boolean(supabase);
+  const skills = useMemo(() => content.expertise || [], [content.expertise]);
+  const isAdminRoute = window.location.pathname.replace(/\/+$/, '') === '/admin';
 
   // Dedicated admin URL; it is not linked from the public portfolio.
   if (isAdminRoute) {
