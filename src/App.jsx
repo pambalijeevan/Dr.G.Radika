@@ -1,17 +1,35 @@
-                    <div className="admin-panel-heading admin-panel-heading-row"><div><span className="admin-kicker">CONTENT SECTION</span><h3>{adminSections.find(section => section.id === adminSection)?.label}</h3><p>{adminSections.find(section => section.id === adminSection)?.hint}</p></div><button type="button" className="button button-outline" onClick={() => addListItem(adminSection)}>＋ Add item</button></div>
-                    {(content[adminSection] || []).length === 0 && <div className="admin-empty-state"><BookOpen size={25}/><strong>No items added yet</strong><p>Add your first item using the button above.</p><button type="button" className="button button-dark" onClick={() => addListItem(adminSection)}>＋ Add first item</button></div>}
-                    <div className="admin-record-list">{(content[adminSection] || []).map((item, index) => <article className="admin-record-card" key={`${adminSection}-${index}`}>
-                      <div className="admin-record-heading"><div><span>ITEM {String(index + 1).padStart(2, '0')}</span><strong>{item.title || `New ${adminSections.find(section => section.id === adminSection)?.label.toLowerCase()} item`}</strong></div><button type="button" className="admin-remove-button" onClick={() => removeListItem(adminSection, index)}><X size={15}/> Remove</button></div>
-                      <div className="admin-fields-grid">{(adminListFields[adminSection] || []).map(field => <label key={field.key} className={`admin-field ${field.multiline ? 'admin-field-wide' : ''}`}>{field.label}{field.multiline ? <textarea rows={3} value={item[field.key] || ''} onChange={e => updateListField(adminSection, index, field.key, e.target.value)} placeholder={`Enter ${field.label.toLowerCase()}`}/> : <input value={item[field.key] || ''} onChange={e => updateListField(adminSection, index, field.key, e.target.value)} placeholder={`Enter ${field.label.toLowerCase()}`}/>}</label>)}</div>
-                      {adminSection === 'achievements' && item.image && <div className="admin-image-preview"><img src={item.image} alt={item.title || 'Achievement certificate preview'}/></div>}
-                    </article>)}</div>
-                    {adminSection === 'resources' && <div className="admin-upload-resource"><div><strong>Upload a lecture PDF</strong><p>Upload a PDF to add it to the resources list automatically.</p></div><label className="upload-button"><FileText size={16}/>{uploadBusy ? 'Uploading…' : 'Upload lecture PDF'}<input type="file" accept="application/pdf,.pdf" onChange={uploadResource} hidden disabled={uploadBusy}/></label></div>}
-                  </>}
-                  {adminSection !== 'resources' && <div className="admin-quick-upload"><div><strong>Lecture PDF</strong><p>Add a PDF resource to your public website.</p></div><label className="upload-button"><FileText size={16}/>{uploadBusy ? 'Uploading…' : 'Upload lecture PDF'}<input type="file" accept="application/pdf,.pdf" onChange={uploadResource} hidden disabled={uploadBusy}/></label></div>}
-                  {editError && <p className="form-error" role="alert">{editError}</p>}
-                  <div className="admin-panel-footer"><span><ShieldCheck size={15}/> Your edits are saved to the database only after publishing.</span><button className="button button-dark" onClick={saveContent} disabled={uploadBusy}><Save size={16}/> Publish changes</button></div>
-                </section>
+
+  // Dedicated admin URL; it is not linked from the public portfolio.
+  if (isAdminRoute) {
+    return (
+      <div className="admin-page">
+        <div className="admin-page-top">
+          <a className="brand" href="/"><span className="brand-mark">R<span>.</span></span><span className="brand-text">{content.profile.name}<small>PORTFOLIO ADMINISTRATION</small></span></a>
+          <a className="admin-back-link" href="/">← View public website</a>
+        </div>
+        <main className="admin-page-main">
+          <div className="section-marker"><span>PRIVATE</span> ADMINISTRATOR AREA</div>
+          <h1 className="admin-page-title">{user ? 'Manage your website.' : 'Administrator sign in.'}</h1>
+          <p className="admin-page-intro">Sign in with the private administrator account to update the public academic portfolio.</p>
+          {!isConfigured && <div className="notice notice-warn">Admin login is not active yet. Complete the Supabase setup in SETUP.md and configure the environment variables.</div>}
+          {!user ? (
+            <form className="login-form admin-login-card" onSubmit={signIn}>
+              <label>Email address<input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Admin email address"/></label>
+              <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Password"/></label>
+              {authError && <p className="form-error">{authError}</p>}
+              <button className="button button-dark" disabled={authBusy}>{authBusy ? 'Signing in…' : 'Sign in securely'} <LogIn size={16}/></button>
+              <p className="form-hint">There is no public registration. Create the admin account privately in Supabase.</p>
+            </form>
+          ) : (
+            <div className="admin-page-editor">
+              <div className="admin-user"><ShieldCheck size={18}/><span>Signed in as {user.email}</span><button onClick={signOut}><LogOut size={14}/> Sign out</button></div>
+              <div className="notice">Edit the website content below. Preserve the JSON structure and valid syntax, then publish to update the public site.</div>
+              <label className="json-label">Website content<textarea className="json-editor" spellCheck="false" value={editJson} onChange={e => setEditJson(e.target.value)} /></label>
+              <div className="admin-tools">
+                <div className="upload-actions"><label className="upload-button"><ImagePlus size={16}/>Upload profile photo<input type="file" accept="image/*" onChange={e => uploadImage(e, 'photo')} hidden disabled={uploadBusy}/></label><label className="upload-button"><ImagePlus size={16}/>Upload college logo<input type="file" accept="image/*" onChange={e => uploadImage(e, 'collegeLogo')} hidden disabled={uploadBusy}/></label><label className="upload-button"><FileText size={16}/>{uploadBusy ? 'Uploading…' : 'Upload lecture PDF'}<input type="file" accept="application/pdf,.pdf" onChange={uploadResource} hidden disabled={uploadBusy}/></label></div>
+                <button className="button button-dark" onClick={saveContent}><Save size={16}/> Publish changes</button>
               </div>
+              {editError && <p className="form-error">{editError}</p>}
             </div>
           )}
           {notice && <p className="notice notice-success"><Check size={16}/>{notice}</p>}
@@ -78,7 +96,7 @@
           <div className="section-marker"><span>05</span> ACADEMIC JOURNEY</div>
           <div className="career-columns">
             <div><h2>Qualifications & <em>experience.</em></h2><div className="timeline-list">{(content.qualifications || []).map((item, i) => <article className="timeline-item" key={`${item.title}-${i}`}><GraduationCap size={19}/><div><h3>{item.title}</h3><p>{item.institution || ''}{item.year ? ` · ${item.year}` : ''}</p>{item.description && <small>{item.description}</small>}</div></article>)}{(content.experience || []).map((item, i) => <article className="timeline-item" key={`${item.title}-${i}`}><BriefcaseBusiness size={19}/><div><h3>{item.title}</h3><p>{item.organization || ''}{item.period ? ` · ${item.period}` : ''}</p>{item.description && <small>{item.description}</small>}</div></article>)}{!(content.qualifications || []).length && !(content.experience || []).length && <p className="empty-section-note">Qualifications and experience can be added by the administrator.</p>}</div></div>
-            <div><h2>Achievements & <em>recognition.</em></h2><div className="timeline-list">{(content.achievements || []).map((item, i) => <article className="timeline-item" key={`${item.title}-${i}`}><Award size={19}/><div><h3>{item.title}</h3><p>{item.organization || ''}{item.year ? ` · ${item.year}` : ''}</p>{item.description && <small>{item.description}</small>}{item.image && <img className="achievement-image" src={item.image} alt={`${item.title} certificate`} loading="lazy"/>}{item.link && <p><a href={item.link} target="_blank" rel="noreferrer">View certificate <ArrowUpRight size={14}/></a></p>}</div></article>)}{!(content.achievements || []).length && <p className="empty-section-note">Awards, certifications and achievements can be added here.</p>}</div></div>
+            <div><h2>Achievements & <em>recognition.</em></h2><div className="timeline-list">{(content.achievements || []).map((item, i) => <article className="timeline-item" key={`${item.title}-${i}`}><Award size={19}/><div><h3>{item.title}</h3><p>{item.organization || ''}{item.year ? ` · ${item.year}` : ''}</p>{item.description && <small>{item.description}</small>}</div></article>)}{!(content.achievements || []).length && <p className="empty-section-note">Awards, certifications and achievements can be added here.</p>}</div></div>
           </div>
         </section>
 
