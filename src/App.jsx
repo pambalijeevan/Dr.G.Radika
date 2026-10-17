@@ -53,6 +53,7 @@ const initialContent = {
     { title: 'Video Lessons', description: 'Short lessons that break down difficult computer science concepts.', label: 'WATCH', link: '' },
     { title: 'Practice & Quizzes', description: 'Exercises and questions for concept reinforcement.', label: 'PRACTICE', link: '' }
   ],
+  customSections: [],
   footer: 'Teaching, mentoring and lifelong learning.'
 };
 
@@ -76,6 +77,7 @@ function App() {
   const [authError, setAuthError] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [editJson, setEditJson] = useState('');
+  const [activeAdminTab, setActiveAdminTab] = useState('profile');
   const [editError, setEditError] = useState('');
   const [notice, setNotice] = useState('');
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -97,17 +99,13 @@ function App() {
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
 
-  useEffect(() => {
-    if (user && !editJson) setEditJson(JSON.stringify(content, null, 2));
-  }, [user, content, editJson]);
-
   const nav = [
     ['About', '#about'], ['Teaching', '#teaching'], ['Courses', '#courses'],
-    ['Initiatives', '#initiatives'], ['Career', '#career'], ['Publications', '#publications'], ['Resources', '#resources']
+    ['Initiatives', '#initiatives'], ['Career', '#career'], ['Publications', '#publications'], ['Resources', '#resources'],
+    ...(content.customSections || []).map(section => [section.title, `#${section.id}`])
   ];
 
   function openAdmin() {
-    setEditJson(JSON.stringify(content, null, 2));
     setEditError('');
     setNotice('');
     setAdminOpen(true);
@@ -121,16 +119,13 @@ function App() {
     }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setAuthError(error.message);
-    else { setNotice('Signed in. Your private editor is ready.'); setEditJson(JSON.stringify(content, null, 2)); }
+    else { setNotice('Signed in. Your private editor is ready.'); }
     setAuthBusy(false);
   }
 
   async function saveContent() {
     setEditError(''); setNotice('');
-    let parsed;
-    try { parsed = JSON.parse(editJson); }
-    catch { setEditError('The content has a JSON syntax error. Check commas, quotes and brackets.'); return; }
-    if (!parsed.profile?.name || !parsed.profile?.role) {
+    if (!content.profile?.name || !content.profile?.role) {
       setEditError('Please keep the profile name and role fields.'); return;
     }
     if (!supabase || !user) {
@@ -138,11 +133,47 @@ function App() {
       return;
     }
     const { error } = await supabase.from('site_content').upsert({
-      id: 'main', content: parsed, updated_at: new Date().toISOString()
+      id: 'main', content, updated_at: new Date().toISOString()
     });
     if (error) { setEditError(error.message); return; }
-    setContent(parsed);
     setNotice('Published! Your public portfolio now uses the updated content.');
+  }
+
+  function updateProfile(field, value) {
+    setContent(current => ({ ...current, profile: { ...current.profile, [field]: value } }));
+  }
+
+  function updateListItem(listName, index, field, value) {
+    setContent(current => {
+      const list = [...(current[listName] || [])];
+      list[index] = { ...(list[index] || {}), [field]: value };
+      return { ...current, [listName]: list };
+    });
+  }
+
+  function addListItem(listName, template) {
+    setContent(current => ({ ...current, [listName]: [...(current[listName] || []), { ...template }] }));
+  }
+
+  function deleteListItem(listName, index) {
+    setContent(current => ({ ...current, [listName]: (current[listName] || []).filter((_, i) => i !== index) }));
+  }
+
+  function addCustomSection() {
+    setContent(current => ({ ...current, customSections: [...(current.customSections || []), { id: `section-${Date.now()}`, title: 'New section', description: '', items: [] }] }));
+    setActiveAdminTab('customSections');
+  }
+
+  function updateCustomSection(index, field, value) {
+    setContent(current => {
+      const sections = [...(current.customSections || [])];
+      sections[index] = { ...sections[index], [field]: value };
+      return { ...current, customSections: sections };
+    });
+  }
+
+  function deleteCustomSection(index) {
+    setContent(current => ({ ...current, customSections: (current.customSections || []).filter((_, i) => i !== index) }));
   }
 
   async function uploadImage(event, field) {
@@ -158,7 +189,7 @@ function App() {
     if (uploadError) { setEditError(uploadError.message); setUploadBusy(false); return; }
     const { data } = supabase.storage.from('portfolio-media').getPublicUrl(path);
     const next = { ...content, profile: { ...content.profile, [field]: data.publicUrl } };
-    setContent(next); setEditJson(JSON.stringify(next, null, 2));
+    setContent(next);
     setNotice(`${field === 'photo' ? 'Profile photo' : 'College logo'} uploaded. Click “Publish changes” to make it live.`);
     setUploadBusy(false); event.target.value = '';
   }
@@ -177,7 +208,7 @@ function App() {
     if (uploadError) { setEditError(uploadError.message); setUploadBusy(false); return; }
     const { data } = supabase.storage.from('portfolio-media').getPublicUrl(path);
     const next = { ...content, resources: [...(content.resources || []), { title: file.name.replace(/\.pdf$/i, ''), description: 'PDF learning resource', label: 'PDF / NOTES', link: data.publicUrl }] };
-    setContent(next); setEditJson(JSON.stringify(next, null, 2));
+    setContent(next);
     setNotice('PDF uploaded and added to resources. Click “Publish changes” to make it live.');
     setUploadBusy(false); event.target.value = '';
   }
@@ -215,13 +246,50 @@ function App() {
           ) : (
             <div className="admin-page-editor">
               <div className="admin-user"><ShieldCheck size={18}/><span>Signed in as {user.email}</span><button onClick={signOut}><LogOut size={14}/> Sign out</button></div>
-              <div className="notice">Edit the website content below. Preserve the JSON structure and valid syntax, then publish to update the public site.</div>
-              <label className="json-label">Website content<textarea className="json-editor" spellCheck="false" value={editJson} onChange={e => setEditJson(e.target.value)} /></label>
-              <div className="admin-tools">
-                <div className="upload-actions"><label className="upload-button"><ImagePlus size={16}/>Upload profile photo<input type="file" accept="image/*" onChange={e => uploadImage(e, 'photo')} hidden disabled={uploadBusy}/></label><label className="upload-button"><ImagePlus size={16}/>Upload college logo<input type="file" accept="image/*" onChange={e => uploadImage(e, 'collegeLogo')} hidden disabled={uploadBusy}/></label><label className="upload-button"><FileText size={16}/>{uploadBusy ? 'Uploading…' : 'Upload lecture PDF'}<input type="file" accept="application/pdf,.pdf" onChange={uploadResource} hidden disabled={uploadBusy}/></label></div>
-                <button className="button button-dark" onClick={saveContent}><Save size={16}/> Publish changes</button>
+              <div className="admin-workspace">
+                <aside className="admin-sidebar">
+                  <div className="admin-sidebar-label">WEBSITE CONTENT</div>
+                  {[
+                    ['profile','Profile & contact'],['qualifications','Education'],['experience','Experience'],['expertise','Teaching expertise'],['courses','Courses'],['initiatives','Initiatives'],['achievements','Achievements'],['publications','Publications'],['resources','Resources'],['customSections','Custom sections']
+                  ].map(([key,label]) => <button key={key} className={activeAdminTab === key ? 'admin-tab active' : 'admin-tab'} onClick={() => setActiveAdminTab(key)}>{label}<span>{key === 'profile' ? 'Edit' : key === 'customSections' ? (content.customSections || []).length : (content[key] || []).length}</span></button>)}
+                  <button className="admin-tab add-section-tab" onClick={addCustomSection}><span>＋ Create a section</span></button>
+                </aside>
+                <div className="admin-editor-panel">
+                  <div className="admin-panel-heading"><div><span className="admin-eyebrow">EDIT WEBSITE</span><h2>{({profile:'Profile & contact',qualifications:'Education & qualifications',experience:'Professional experience',expertise:'Teaching expertise',courses:'Courses & learning',initiatives:'Initiatives',achievements:'Achievements & awards',publications:'Publications',resources:'Learning resources',customSections:'Custom sections'})[activeAdminTab]}</h2><p>Changes stay in draft until you publish them.</p></div><button className="button button-dark" onClick={saveContent}><Save size={16}/> Publish changes</button></div>
+                  {activeAdminTab === 'profile' && <div className="admin-form-grid">
+                    {[
+                      ['name','Full name'],['role','Professional title'],['college','Institution'],['location','Location'],['eyebrow','Hero eyebrow'],['headline','Main headline'],['intro','Introduction'],['about','About text'],['email','Email address'],['phone','Phone number']
+                    ].map(([key,label]) => <label key={key} className={['intro','about','headline','eyebrow'].includes(key) ? 'admin-field full' : 'admin-field'}>{label}{['intro','about'].includes(key) ? <textarea rows="4" value={content.profile[key] || ''} onChange={e => updateProfile(key,e.target.value)} /> : <input value={content.profile[key] || ''} onChange={e => updateProfile(key,e.target.value)} />}</label>)}
+                    <label className="admin-field">LinkedIn URL<input value={content.profile.socials?.linkedin || ''} onChange={e => updateProfile('socials',{...(content.profile.socials || {}),linkedin:e.target.value})}/></label>
+                    <label className="admin-field">YouTube URL<input value={content.profile.socials?.youtube || ''} onChange={e => updateProfile('socials',{...(content.profile.socials || {}),youtube:e.target.value})}/></label>
+                    <div className="admin-media-tools"><label className="upload-button"><ImagePlus size={16}/> {uploadBusy ? 'Uploading…' : 'Upload profile photo'}<input type="file" accept="image/*" onChange={e => uploadImage(e,'photo')} hidden disabled={uploadBusy}/></label><label className="upload-button"><ImagePlus size={16}/> Upload college logo<input type="file" accept="image/*" onChange={e => uploadImage(e,'collegeLogo')} hidden disabled={uploadBusy}/></label></div>
+                  </div>}
+                  {['qualifications','experience','expertise','courses','initiatives','achievements','publications','resources'].includes(activeAdminTab) && <div className="admin-list-editor">
+                    {(content[activeAdminTab] || []).map((item,index) => {
+                      const fieldSets = {
+                        qualifications:[['title','Qualification / degree'],['institution','Institution'],['year','Year'],['description','Details']],
+                        experience:[['title','Role / position'],['organization','Organization'],['period','Period'],['description','Details']],
+                        expertise:[['title','Topic'],['description','Description'],['icon','Icon key']],
+                        courses:[['title','Course title'],['description','Description'],['status','Status'],['link','Course URL']],
+                        initiatives:[['title','Initiative title'],['description','Description']],
+                        achievements:[['title','Achievement / award'],['organization','Organization'],['year','Year'],['description','Details']],
+                        publications:[['title','Publication title'],['authors','Authors'],['year','Year'],['publisher','Journal / publisher'],['link','Publication URL']],
+                        resources:[['title','Resource title'],['description','Description'],['label','Type / label'],['link','Resource URL']]
+                      };
+                      return <article className="admin-item-card" key={`${activeAdminTab}-${index}`}><div className="admin-item-heading"><strong>{String(index+1).padStart(2,'0')} · {item.title || 'Untitled item'}</strong><button className="admin-delete" onClick={() => deleteListItem(activeAdminTab,index)}><X size={15}/> Delete</button></div><div className="admin-form-grid">{fieldSets[activeAdminTab].map(([field,label]) => <label key={field} className={field === 'description' ? 'admin-field full' : 'admin-field'}>{label}{field === 'description' ? <textarea rows="3" value={item[field] || ''} onChange={e => updateListItem(activeAdminTab,index,field,e.target.value)}/> : <input value={item[field] || ''} onChange={e => updateListItem(activeAdminTab,index,field,e.target.value)}/>}</label>)}</div></article>;
+                    })}
+                    <button className="admin-add-button" onClick={() => addListItem(activeAdminTab,({qualifications:{title:'',institution:'',year:'',description:''},experience:{title:'',organization:'',period:'',description:''},expertise:{title:'',description:'',icon:'code'},courses:{title:'',description:'',status:'Available',link:''},initiatives:{title:'',description:''},achievements:{title:'',organization:'',year:'',description:''},publications:{title:'',authors:'',year:'',publisher:'',link:''},resources:{title:'',description:'',label:'PDF / NOTES',link:''}})[activeAdminTab])}>＋ Add {({qualifications:'education entry',experience:'experience entry',expertise:'topic',courses:'course',initiatives:'initiative',achievements:'achievement',publications:'publication',resources:'resource'})[activeAdminTab]}</button>
+                    {activeAdminTab === 'resources' && <div className="admin-upload-resource"><label className="upload-button"><FileText size={16}/>{uploadBusy ? 'Uploading…' : 'Upload lecture PDF'}<input type="file" accept="application/pdf,.pdf" onChange={uploadResource} hidden disabled={uploadBusy}/></label><span>PDFs are uploaded to your existing portfolio-media storage.</span></div>}
+                  </div>}
+                  {activeAdminTab === 'customSections' && <div className="admin-list-editor">
+                    <p className="admin-help">Create additional public sections, such as Workshops, Certifications, Research Projects or Guest Lectures. Each section can contain any number of entries.</p>
+                    {(content.customSections || []).map((section,index) => <article className="admin-item-card" key={section.id || index}><div className="admin-item-heading"><strong>Custom section {index+1}</strong><button className="admin-delete" onClick={() => deleteCustomSection(index)}><X size={15}/> Delete section</button></div><div className="admin-form-grid"><label className="admin-field">Section title<input value={section.title || ''} onChange={e => updateCustomSection(index,'title',e.target.value)}/></label><label className="admin-field full">Section description<textarea rows="2" value={section.description || ''} onChange={e => updateCustomSection(index,'description',e.target.value)}/></label></div><div className="admin-custom-entries">{(section.items || []).map((item,itemIndex) => <div className="admin-custom-entry" key={itemIndex}><label className="admin-field">Entry title<input value={item.title || ''} onChange={e => { const items=[...(section.items || [])]; items[itemIndex]={...items[itemIndex],title:e.target.value}; updateCustomSection(index,'items',items); }}/></label><label className="admin-field">Details<input value={item.description || ''} onChange={e => { const items=[...(section.items || [])]; items[itemIndex]={...items[itemIndex],description:e.target.value}; updateCustomSection(index,'items',items); }}/></label><label className="admin-field">Link (optional)<input value={item.link || ''} onChange={e => { const items=[...(section.items || [])]; items[itemIndex]={...items[itemIndex],link:e.target.value}; updateCustomSection(index,'items',items); }}/></label><button className="admin-delete" onClick={() => updateCustomSection(index,'items',(section.items || []).filter((_,i)=>i!==itemIndex))}>Delete entry</button></div>)}</div><button className="admin-add-button small" onClick={() => updateCustomSection(index,'items',[...(section.items || []),{title:'',description:'',link:''}])}>＋ Add entry</button></article>)}
+                    <button className="admin-add-button" onClick={addCustomSection}>＋ Create another section</button>
+                  </div>}
+                  <div className="admin-bottom-actions"><div className="upload-actions"><label className="upload-button"><ImagePlus size={16}/> Upload profile photo<input type="file" accept="image/*" onChange={e => uploadImage(e,'photo')} hidden disabled={uploadBusy}/></label><label className="upload-button"><ImagePlus size={16}/> Upload college logo<input type="file" accept="image/*" onChange={e => uploadImage(e,'collegeLogo')} hidden disabled={uploadBusy}/></label></div><button className="button button-dark" onClick={saveContent}><Save size={16}/> Publish all changes</button></div>
+                  {editError && <p className="form-error">{editError}</p>}
+                </div>
               </div>
-              {editError && <p className="form-error">{editError}</p>}
             </div>
           )}
           {notice && <p className="notice notice-success"><Check size={16}/>{notice}</p>}
@@ -301,6 +369,8 @@ function App() {
           <div className="section-marker"><span>05</span> LEARNING RESOURCES</div><div className="section-heading"><h2>Resources for the <em>next step.</em></h2><p>Notes, lessons and practice activities designed to support learning beyond class.</p></div>
           <div className="resource-grid">{(content.resources || []).map((item, i) => <article className="resource-card" key={item.title}><span className="resource-label">{item.label || 'LEARNING'}</span><div className="resource-icon">{i === 0 ? <BookOpen/> : i === 1 ? <BrainCircuit/> : <Code2/>}</div><h3>{item.title}</h3><p>{item.description}</p>{item.link ? <a href={item.link} target="_blank" rel="noreferrer">Open resource <ArrowUpRight size={15}/></a> : <span className="coming-soon">RESOURCE LINK TO BE ADDED</span>}</article>)}</div>
         </section>
+
+        {(content.customSections || []).filter(section => section.title).map((section, sectionIndex) => <section className="custom-public-section section-pad" id={section.id} key={section.id || sectionIndex}><div className="section-marker"><span>{String(7 + sectionIndex).padStart(2,'0')}</span> ADDITIONAL SECTION</div><div className="section-heading"><h2>{section.title}</h2>{section.description && <p>{section.description}</p>}</div><div className="custom-public-grid">{(section.items || []).map((item,itemIndex) => <article className="custom-public-card" key={itemIndex}><span>{String(itemIndex+1).padStart(2,'0')}</span><h3>{item.title}</h3>{item.description && <p>{item.description}</p>}{item.link && <a href={item.link} target="_blank" rel="noreferrer">Learn more <ArrowUpRight size={15}/></a>}</article>)}</div></section>)}
 
         <section className="contact-section section-pad" id="contact"><div className="contact-overline">06 / CONTACT & COLLABORATION</div><h2>Let's make learning<br/><em>meaningful.</em></h2><p>For academic collaboration, learning resources or student-focused initiatives, feel free to connect.</p><div className="contact-details"><div><span>FACULTY</span><strong>{content.profile.name}</strong></div><div><span>INSTITUTION</span><strong>{content.profile.college}</strong></div><div><span>LOCATION</span><strong>{content.profile.location}</strong></div></div>{content.profile.email ? <a className="button button-light" href={`mailto:${content.profile.email}`}>Write an email <Mail size={16}/></a> : <span className="email-note">Contact details can be added by the portfolio administrator.</span>}<div className="social-links">{Object.entries(content.profile.socials || {}).filter(([, url]) => url).map(([name, url]) => <a key={name} href={url} target="_blank" rel="noreferrer">{name} <ArrowUpRight size={14}/></a>)}</div></section>
       </main>
