@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check,
   Code2, ExternalLink, GraduationCap, Layers3, LogIn, LogOut, Mail, Menu,
-  Save, ShieldCheck, Sparkles, Upload, X, FileText, Award, BriefcaseBusiness, ScrollText
+  Save, ShieldCheck, Sparkles, Upload, X, FileText, Award, BriefcaseBusiness, ScrollText, ImagePlus
 } from 'lucide-react';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
